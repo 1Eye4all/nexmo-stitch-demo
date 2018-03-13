@@ -1,0 +1,23 @@
+{
+  "name": "nexmo-stitch-demo",
+  "version": "1.0.0",
+  "description": "",
+  "main": "core.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alwell-kevin/nexmo-stitch-demo.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/alwell-kevin/nexmo-stitch-demo/issues"
+  },
+  "homepage": "https://github.com/alwell-kevin/nexmo-stitch-demo#readme",
+  "dependencies": {
+    "nexmo": "^2.1.0-beta-1",
+    "nexmo-conversation": "^0.1.19"
+  }
+}

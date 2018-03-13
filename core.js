@@ -1,3 +1,29 @@
+// $.ajax({
+//     url: 'https://b0c7904f.ngrok.io/getJwt',
+//     type: 'GET',
+//     crossDomain: true,
+//     dataType: 'jsonp',
+//     success: function (data) {
+//         alert("Success", data);
+//     },
+//     error: function (err) {
+//         alert('Failed!', err);
+//     }
+// });
+
+// //Initialize conversation client.
+// var rtc = new ConversationClient({
+//     debug: false
+// });
+
+// rtc.login(token).then(
+//     function (application) {
+//         // use the application object to manage the conversations
+//         // access the available conversations
+//         console.log(application);
+//     });
+
+
 $(document).ready(function () {
 
     var activeUser = localStorage.getItem('active_user');
