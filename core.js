@@ -1,30 +1,9 @@
-// $.ajax({
-//     url: 'https://b0c7904f.ngrok.io/getJwt',
-//     type: 'GET',
-//     crossDomain: true,
-//     dataType: 'jsonp',
-//     success: function (data) {
-//         alert("Success", data);
-//     },
-//     error: function (err) {
-//         alert('Failed!', err);
-//     }
-// });
-
-// //Initialize conversation client.
-// var rtc = new ConversationClient({
-//     debug: false
-// });
-
-// rtc.login(token).then(
-//     function (application) {
-//         // use the application object to manage the conversations
-//         // access the available conversations
-//         console.log(application);
-//     });
-
+var base_url = "https://memessaging-gateway.herokuapp.com"
+var conversation_id = "CON-36bbd342-5a7e-4eb5-bdb9-c113ec32e04a"
 
 $(document).ready(function () {
+    var conversations = getConversations();
+    var users = getUsers();
 
     var activeUser = localStorage.getItem('active_user');
     if (activeUser && !onChatScreen()) {
@@ -123,3 +102,84 @@ function newMessage() {
         scrollTop: $(document).height()
     }, "fast");
 };
+
+function addUserToConversation(activeUser) {
+    $.ajax({
+        url: base_url + '/users',
+        type: 'GET',
+        dataType: 'jsonp',
+        data: {
+            "username": activeUser,
+            "admin": true
+        },
+        success: function (data) {
+            console.log("Success", data);
+        },
+        error: function (err) {
+            console.log('Failed!', err);
+        }
+    });
+}
+
+function getConversations() {
+    $.ajax({
+        url: base_url + '/conversations',
+        type: 'GET',
+        success: function (data) {
+            return data._embedded.conversations
+        },
+        error: function (err) {
+            console.log('Failed!', err);
+        }
+    });
+}
+
+function createConversation(displayName) {
+    $.ajax({
+        url: base_url + '/conversations',
+        type: 'POST',
+        data: {
+            "displayName": displayName
+        },
+        success: function (data) {
+            console.log("CREATED CONVERSATION: ", data)
+            return data
+        },
+        error: function (err) {
+            console.log('Failed!', err);
+        }
+    });
+}
+
+function getUsers() {
+    $.ajax({
+        url: base_url + '/users',
+        type: 'GET',
+        success: function (data) {
+            console.log("Success", data);
+        },
+        error: function (err) {
+            console.log('Failed!', err);
+        }
+    });
+}
+
+function createUser(userName) {
+    $.ajax({
+        url: base_url + '/users',
+        type: 'POST',
+        data: {
+            "username": userName,
+            "admin": true
+        },
+        success: function (data) {
+            return {
+                user_jwt: data.user_jwt,
+                user_id: data.user.id
+            }
+        },
+        error: function (err) {
+            console.log('Failed!', err);
+        }
+    });
+}
