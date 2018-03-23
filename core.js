@@ -1,8 +1,17 @@
 var base_url = "https://memessaging-gateway.herokuapp.com"
 var conversation_id = "CON-36bbd342-5a7e-4eb5-bdb9-c113ec32e04a"
-var users, conversations, conversation;
-getUsers();
-getConversations();
+var users, conversations;
+
+var activeUser = JSON.parse(localStorage.getItem('active_user'));
+var conversation = JSON.parse(localStorage.getItem('active_conversation'));
+
+if (!activeUser || !activeUser.uuid) {
+    getUsers();
+}
+
+if (!conversation || !conversation.uuid) {
+    getConversations();
+}
 
 $(document).ready(function () {
 
@@ -32,6 +41,11 @@ $(document).ready(function () {
                     localStorage.setItem('active_user', JSON.stringify(activeUser));
 
                     getConversationMembers(conversation.uuid).then(function (conversationMembersList) {
+                        //Update active conversation with list of members.
+                        var activeConversation = JSON.parse(localStorage.getItem('active_conversation'));
+                        activeConversation.memberList = conversationMembersList;
+                        localStorage.setItem("active_conversation", JSON.stringify(activeConversation));
+
                         var containedWithin = conversationMembersList.some(c => c.user_name === activeUser.name) // CONVERSATION CONTAIN THIS MEMEBR
                         if (conversationMembersList.length === 0 || !containedWithin) {
                             //Add member to conversation
@@ -121,6 +135,7 @@ function enterChatScreen() {
 function goToLogin() {
     window.location.href = './index.html';
     localStorage.removeItem('active_user');
+    localStorage.removeItem('active_conversation');
     activeUser = {};
     $("#signInContainer").show();
 }
@@ -159,9 +174,11 @@ function addUserToConversation(activeUser, conversation) {
             },
             success: function (data) {
                 console.log("Success addUserToConversation", data);
+                resolve(data)
             },
             error: function (err) {
                 console.log('Failed! addUserToConversation', err);
+                reject(err);
             }
         });
     })
@@ -229,6 +246,7 @@ function getConversations() {
 
             conversations = data._embedded.conversations;
             conversation = conversations[0];
+            localStorage.setItem("active_conversation", JSON.stringify(conversation));
         },
         error: function (err) {
             console.log('Failed!', err);
