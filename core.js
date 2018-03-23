@@ -1,21 +1,64 @@
 var base_url = "https://memessaging-gateway.herokuapp.com"
 var conversation_id = "CON-36bbd342-5a7e-4eb5-bdb9-c113ec32e04a"
+var users, conversations, conversation;
+getUsers();
+getConversations();
 
 $(document).ready(function () {
-    var conversations = getConversations();
-    var users = getUsers();
 
-    var activeUser = localStorage.getItem('active_user');
-    if (activeUser && !onChatScreen()) {
+    var activeUser = JSON.parse(localStorage.getItem('active_user'));
+    if (!activeUser) {
+        activeUser = {};
+    }
+    if (activeUser.name && !onChatScreen()) {
         enterChatScreen();
-    } else if (!activeUser && onChatScreen()) {
+    } else if (!activeUser.name && onChatScreen()) {
         goToLogin();
     }
 
-    $(".form-signin").submit(function () {
-        activeUser = $("#inputEmail").val();
-        localStorage.setItem('active_user', activeUser);
-        enterChatScreen();
+    $("#form-signin").click(function () {
+        activeUser.name = $("#inputEmail").val()
+        if (activeUser.name != "") {
+            //Check if user exists. 
+            //If so, check if in conversation. 
+            //If not add to conversation.
+            //If not, create, then add to conversation.
+            var found = false;
+
+            for (var i = 0; i < users.length; i++) {
+                if (users[i].name === activeUser.name) {
+                    found = true;
+                    activeUser = users[i];
+                    localStorage.setItem('active_user', JSON.stringify(activeUser));
+
+                    getConversationMembers(conversation.uuid).then(function (conversationMembersList) {
+                        var containedWithin = conversationMembersList.some(c => c.user_name === activeUser.name) // CONVERSATION CONTAIN THIS MEMEBR
+                        if (conversationMembersList.length === 0 || !containedWithin) {
+                            //Add member to conversation
+                            console.log("ADDING ACTIVE USER TO CONVERSATION: ", activeUser);
+                            addUserToConversation(activeUser, conversation).then(function (resp) {
+                                console.log("ADDED USER TO CONV", resp);
+                                enterChatScreen();
+                            })
+                        } else {
+                            enterChatScreen();
+                        }
+
+                    })
+                    console.log("User Exists", activeUser)
+                }
+            }
+
+            if (!found) {
+                createUser(activeUser.name).then(function () {
+
+
+                    enterChatScreen();
+                })
+
+                console.log("USER CREATED: ", activeUser);
+            }
+        }
     })
 
     $("#profile-img").click(function () {
@@ -78,7 +121,7 @@ function enterChatScreen() {
 function goToLogin() {
     window.location.href = './index.html';
     localStorage.removeItem('active_user');
-    activeUser = null;
+    activeUser = {};
     $("#signInContainer").show();
 }
 
@@ -103,21 +146,74 @@ function newMessage() {
     }, "fast");
 };
 
-function addUserToConversation(activeUser) {
+function addUserToConversation(activeUser, conversation) {
+    return new Promise( /* executor */ function (resolve, reject) {
+        $.ajax({
+            url: base_url + '/conversationmember',
+            type: 'GET',
+            dataType: 'jsonp',
+            data: {
+                conversationId: conversation.uuid,
+                userId: activeUser.id,
+                action: "join"
+            },
+            success: function (data) {
+                console.log("Success addUserToConversation", data);
+            },
+            error: function (err) {
+                console.log('Failed! addUserToConversation', err);
+            }
+        });
+    })
+}
+
+function getUserConversations(userId) {
     $.ajax({
-        url: base_url + '/users',
+        url: base_url + '/conversation',
         type: 'GET',
         dataType: 'jsonp',
         data: {
-            "username": activeUser,
-            "admin": true
+            "userId": userId
         },
         success: function (data) {
-            console.log("Success", data);
+            console.log("USER CONVERSATION DATA: ", data);
+            var user = JSON.parse(localStorage.getItem('active_user'));
+            user.conversation = data;
+            conversation = user.conversation;
+            localStorage.setItem("active_user", JSON.stringify(user));
         },
         error: function (err) {
             console.log('Failed!', err);
         }
+    });
+}
+
+// contentType: 'application/json; charset=utf-8',
+// data: json,
+// dataType: 'text json',
+
+
+
+function getConversationMembers(convId) {
+    return new Promise( /* executor */ function (resolve, reject) {
+        $.ajax({
+            url: base_url + '/conversationmembers',
+            type: 'GET',
+            dataType: 'jsonp',
+            data: {
+                "convId": convId
+            },
+            success: function (data) {
+                console.log("conversationMembers: ", data)
+                conversation.members = data;
+                console.log(data)
+                resolve(data);
+            },
+            error: function (err) {
+                console.log(err)
+                resolve(err)
+            }
+        });
     });
 }
 
@@ -126,7 +222,13 @@ function getConversations() {
         url: base_url + '/conversations',
         type: 'GET',
         success: function (data) {
-            return data._embedded.conversations
+            console.log("Conversations:", data._embedded.conversations);
+            if (data._embedded.conversations.length === 0) {
+                createConversation("kevin-conversation");
+            }
+
+            conversations = data._embedded.conversations;
+            conversation = conversations[0];
         },
         error: function (err) {
             console.log('Failed!', err);
@@ -143,6 +245,8 @@ function createConversation(displayName) {
         },
         success: function (data) {
             console.log("CREATED CONVERSATION: ", data)
+
+            conversations = [data];
             return data
         },
         error: function (err) {
@@ -157,6 +261,7 @@ function getUsers() {
         type: 'GET',
         success: function (data) {
             console.log("Success", data);
+            users = data;
         },
         error: function (err) {
             console.log('Failed!', err);
@@ -165,21 +270,26 @@ function getUsers() {
 }
 
 function createUser(userName) {
-    $.ajax({
-        url: base_url + '/users',
-        type: 'POST',
-        data: {
-            "username": userName,
-            "admin": true
-        },
-        success: function (data) {
-            return {
-                user_jwt: data.user_jwt,
-                user_id: data.user.id
+    return new Promise( /* executor */ function (resolve, reject) {
+        $.ajax({
+            url: base_url + '/users',
+            type: 'POST',
+            data: {
+                "username": userName,
+                "admin": true
+            },
+            success: function (data) {
+                var user = JSON.parse(localStorage.getItem('active_user'));
+                user.user_jwt = data.user_jwt
+                user.id = data.user.id
+                localStorage.setItem("active_user", JSON.stringify(user));
+                resolve(user)
+                console.log("created user: ", user)
+            },
+            error: function (err) {
+                resolve(err)
+                console.log('Failed!', err);
             }
-        },
-        error: function (err) {
-            console.log('Failed!', err);
-        }
-    });
+        });
+    })
 }
