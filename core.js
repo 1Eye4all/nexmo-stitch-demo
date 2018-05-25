@@ -1,5 +1,5 @@
 var base_url = "https://memessaging-gateway.herokuapp.com"
-var conversation_id = "CON-36bbd342-5a7e-4eb5-bdb9-c113ec32e04a"
+
 var users, conversations;
 
 var activeUser = JSON.parse(localStorage.getItem('active_user'));
@@ -20,7 +20,7 @@ $(document).ready(function () {
         activeUser = {};
     }
     if (activeUser.name && !onChatScreen()) {
-        enterChatScreen();
+        enterChatScreen(activeUser);
     } else if (!activeUser.name && onChatScreen()) {
         goToLogin();
     }
@@ -50,12 +50,12 @@ $(document).ready(function () {
                         if (conversationMembersList.length === 0 || !containedWithin) {
                             //Add member to conversation
                             console.log("ADDING ACTIVE USER TO CONVERSATION: ", activeUser);
-                            addUserToConversation(activeUser, conversation).then(function (resp) {
-                                console.log("ADDED USER TO CONV", resp);
-                                enterChatScreen();
-                            })
+                            addUserToConversation(activeUser, conversation);
+                            // console.log("ADDED USER TO CONV", resp);
+                            enterChatScreen(activeUser);
+                            // })
                         } else {
-                            enterChatScreen();
+                            enterChatScreen(activeUser);
                         }
 
                     })
@@ -64,10 +64,14 @@ $(document).ready(function () {
             }
 
             if (!found) {
-                createUser(activeUser.name).then(function () {
+                createUser(activeUser.name).then(function (user) {
+                    console.log("HERE KEVIN: ", user);
+                    addUserToConversation(user, conversation).then(function (conversation) {
+                        activeUser = user;
+                        console.log("new user added to conversation: ", user)
+                        enterChatScreen(activeUser);
+                    })
 
-
-                    enterChatScreen();
                 })
 
                 console.log("USER CREATED: ", activeUser);
@@ -75,15 +79,14 @@ $(document).ready(function () {
         }
     })
 
-    $("#profile-img").click(function () {
-        goToLogin();
-    })
     $(".messages").animate({
         scrollTop: $(document).height()
     }, "fast");
 
     $("#profile-img").click(function () {
         $("#status-options").toggleClass("active");
+        goToLogin();
+
     });
 
     $(".expand-button").click(function () {
@@ -113,23 +116,18 @@ $(document).ready(function () {
 
         $("#status-options").removeClass("active");
     });
-
-    $('.submit').click(function () {
-        newMessage();
-    });
-
-    $(window).on('keydown', function (e) {
-        if (e.which == 13) {
-            newMessage();
-            return false;
-        }
-    });
 });
 
-function enterChatScreen() {
+function enterChatScreen(activeUser) {
+
     $("#signInContainer").hide();
-    window.location.href = './chatWindow.html';
-    return false;
+
+    getUserJwt(activeUser.name).then(function (jwtObj) {
+        activeUser.jwt = jwtObj.user_jwt;
+        localStorage.setItem("active_user", JSON.stringify(activeUser));
+        window.location.href = './chatWindow.html';
+        return false;
+    })
 }
 
 function goToLogin() {
@@ -146,20 +144,6 @@ function onChatScreen() {
     }
     return true
 }
-
-function newMessage() {
-    message = $(".message-input input").val();
-    if ($.trim(message) == '') {
-        return false;
-    }
-    $('<li class="sent"><img src="http://emilcarlsson.se/assets/mikeross.png" alt="" /><p>' + message + '</p></li>').appendTo(
-        $('.messages ul'));
-    $('.message-input input').val(null);
-    $('.contact.active .preview').html('<span>You: </span>' + message);
-    $(".messages").animate({
-        scrollTop: $(document).height()
-    }, "fast");
-};
 
 function addUserToConversation(activeUser, conversation) {
     return new Promise( /* executor */ function (resolve, reject) {
@@ -205,12 +189,6 @@ function getUserConversations(userId) {
     });
 }
 
-// contentType: 'application/json; charset=utf-8',
-// data: json,
-// dataType: 'text json',
-
-
-
 function getConversationMembers(convId) {
     return new Promise( /* executor */ function (resolve, reject) {
         $.ajax({
@@ -238,6 +216,7 @@ function getConversations() {
     $.ajax({
         url: base_url + '/conversations',
         type: 'GET',
+        dataType: 'jsonp',
         success: function (data) {
             console.log("Conversations:", data._embedded.conversations);
             if (data._embedded.conversations.length === 0) {
@@ -258,6 +237,7 @@ function createConversation(displayName) {
     $.ajax({
         url: base_url + '/conversations',
         type: 'POST',
+        dataType: 'jsonp',
         data: {
             "displayName": displayName
         },
@@ -277,6 +257,7 @@ function getUsers() {
     $.ajax({
         url: base_url + '/users',
         type: 'GET',
+        dataType: 'jsonp',
         success: function (data) {
             console.log("Success", data);
             users = data;
@@ -292,21 +273,55 @@ function createUser(userName) {
         $.ajax({
             url: base_url + '/users',
             type: 'POST',
+            dataType: 'json',
             data: {
                 "username": userName,
                 "admin": true
             },
             success: function (data) {
-                var user = JSON.parse(localStorage.getItem('active_user'));
-                user.user_jwt = data.user_jwt
-                user.id = data.user.id
-                localStorage.setItem("active_user", JSON.stringify(user));
-                resolve(user)
-                console.log("created user: ", user)
+                if (data.statusCode === 200) {
+                    var user = JSON.parse(localStorage.getItem('active_user'));
+                    user.user_jwt = data.user_jwt
+                    user.name = userName;
+                    user.id = data.user.id
+                    localStorage.setItem("active_user", JSON.stringify(user));
+                    resolve(user)
+                } else {
+                    console.log("CREATE USER DATA: ", data);
+                    var user = {}
+                    user.user_jwt = data.user_jwt
+                    user.id = data.user.id
+                    user.name = userName;
+                    localStorage.setItem("active_user", JSON.stringify(user));
+                    resolve(user)
+                }
             },
             error: function (err) {
+                err = JSON.parse(err);
+
+                console.log('Create User Failed! ', err);
                 resolve(err)
-                console.log('Failed!', err);
+            }
+        });
+    })
+}
+
+function getUserJwt(userId) {
+    return new Promise(function (resolve, reject) {
+        $.ajax({
+            url: base_url + '/jwt/' + userId,
+            type: 'GET',
+            dataType: 'jsonp',
+            data: {
+                "admin": true
+            },
+            success: function (data) {
+                console.log("JWT Success", data);
+                resolve(data)
+            },
+            error: function (err) {
+                console.log('JWT Failed!', err);
+                reject(err)
             }
         });
     })
